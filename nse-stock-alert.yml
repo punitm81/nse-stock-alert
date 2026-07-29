@@ -1,0 +1,30 @@
+name: NSE Stock Alert
+
+on:
+  schedule:
+    # 10:05 UTC = 15:35 IST, Mon-Fri (~5 min after NSE's 15:30 close)
+    - cron: "5 10 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nse-stock-alert
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - run: python main.py
+        env:
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}

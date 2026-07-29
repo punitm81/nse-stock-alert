@@ -1,0 +1,105 @@
+"""
+NSE 5% Stock Move Alert
+========================
+Fetches NSE's full daily bhavcopy, finds all equities whose close price moved
+>= PCT_CHANGE_THRESHOLD percent (either direction) from the previous close,
+keeps only those with market cap above MARKET_CAP_THRESHOLD_CR crore, and
+emails + SMS-alerts the result. Designed to be run once per trading day
+(see .github/workflows/nse-stock-alert.yml).
+"""
+
+import datetime as dt
+import logging
+import sys
+
+import config
+from market_cap import get_market_cap_cr
+from nse_data import fetch_bhavcopy, find_pct_movers
+from notify_email import send_email_alert
+from notify_sms import send_sms_alert
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("nse_alert")
+
+MAX_SMS_ROWS = 10
+
+
+def build_email_html(rows, today):
+    table_rows = "".join(
+        "<tr>"
+        f"<td>{r['SYMBOL']}</td>"
+        f"<td>{r['CLOSE_PRICE']:.2f}</td>"
+        f"<td>{r['PREV_CLOSE']:.2f}</td>"
+        f"<td style=\"color:{'green' if r['PCT_CHANGE'] >= 0 else 'red'}\">{r['PCT_CHANGE']:+.2f}%</td>"
+        f"<td>{r['MARKET_CAP_CR']:,.0f}</td>"
+        "</tr>"
+        for r in rows
+    )
+    return f"""
+    <h2>NSE Stocks that moved &ge;{config.PCT_CHANGE_THRESHOLD:.0f}% on {today}</h2>
+    <p>Universe: all NSE equities with market cap &gt; {config.MARKET_CAP_THRESHOLD_CR:,.0f} Cr</p>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+      <tr>
+        <th>Symbol</th><th>Close</th><th>Prev Close</th><th>% Change</th><th>Mkt Cap (Cr)</th>
+      </tr>
+      {table_rows}
+    </table>
+    """
+
+
+def build_sms_text(rows, today):
+    top = rows[:MAX_SMS_ROWS]
+    lines = "\n".join(f"{r['SYMBOL']} {r['PCT_CHANGE']:+.1f}%" for r in top)
+    text = f"NSE {config.PCT_CHANGE_THRESHOLD:.0f}%+ movers ({today}):\n{lines}"
+    if len(rows) > MAX_SMS_ROWS:
+        text += f"\n+{len(rows) - MAX_SMS_ROWS} more, see email"
+    return text
+
+
+def main():
+    today = dt.date.today().isoformat()
+
+    logger.info("Fetching NSE bhavcopy...")
+    try:
+        bhav = fetch_bhavcopy()
+    except Exception as exc:
+        logger.error("Failed to fetch bhavcopy (market holiday or NSE blocked the request): %s", exc)
+        sys.exit(1)
+
+    movers = find_pct_movers(bhav, config.PCT_CHANGE_THRESHOLD)
+    logger.info("Found %d stocks with |change| >= %.1f%%", len(movers), config.PCT_CHANGE_THRESHOLD)
+
+    qualified = []
+    for _, row in movers.iterrows():
+        symbol = row["SYMBOL"]
+        mcap_cr = get_market_cap_cr(symbol)
+        if mcap_cr is None:
+            logger.info("Skipping %s: market cap unavailable", symbol)
+            continue
+        if mcap_cr < config.MARKET_CAP_THRESHOLD_CR:
+            continue
+        qualified.append(
+            {
+                "SYMBOL": symbol,
+                "CLOSE_PRICE": row["CLOSE_PRICE"],
+                "PREV_CLOSE": row["PREV_CLOSE"],
+                "PCT_CHANGE": row["PCT_CHANGE"],
+                "MARKET_CAP_CR": mcap_cr,
+            }
+        )
+
+    logger.info("%d stocks qualify after the market cap filter", len(qualified))
+
+    if not qualified:
+        logger.info("No qualifying movers today; no alert sent.")
+        return
+
+    qualified.sort(key=lambda r: abs(r["PCT_CHANGE"]), reverse=True)
+
+    subject = f"NSE Alert: {len(qualified)} stock(s) moved >={config.PCT_CHANGE_THRESHOLD:.0f}% on {today}"
+    send_email_alert(subject, build_email_html(qualified, today))
+    send_sms_alert(build_sms_text(qualified, today))
+
+
+if __name__ == "__main__":
+    main()

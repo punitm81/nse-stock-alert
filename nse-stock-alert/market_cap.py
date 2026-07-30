@@ -29,3 +29,19 @@ def get_market_cap_cr(symbol: str):
     if not market_cap:
         return None
     return market_cap / CRORE
+
+
+def get_live_quote(symbol: str):
+    """Returns (last_price, previous_close) for an NSE symbol via Yahoo Finance, or None if unavailable."""
+    ticker = f"{symbol}.NS"
+    try:
+        info = yf.Ticker(ticker).fast_info
+        last_price = info.get("last_price")
+        prev_close = info.get("previous_close")
+    except Exception as exc:
+        logger.warning("Could not fetch live quote for %s: %s", ticker, exc)
+        return None
+
+    if not last_price or not prev_close:
+        return None
+    return last_price, prev_close

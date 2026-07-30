@@ -5,37 +5,44 @@ whose price moves **5% or more (up or down)** from the previous close.
 
 Two layers, both running automatically via GitHub Actions:
 
-- **Intraday** (`intraday.py`): checks every ~5 minutes during market hours
-  (9:15 AM - 3:30 PM IST) and alerts within minutes of a stock crossing the
-  threshold. Each stock only alerts once per day.
+- **Intraday** (`intraday.py`): checks the largest qualifying stocks every
+  ~5 minutes during market hours (9:15 AM - 3:30 PM IST) and alerts within
+  minutes of one crossing the threshold. Each stock only alerts once per day.
 - **End-of-day** (`main.py`): a full daily sweep of every NSE-listed equity
-  at 19:00 IST, as a complete-coverage safety net (catches anything the
-  intraday check's snapshot might have missed), skipping anything already
-  alerted intraday.
+  at 19:00 IST, as a complete-coverage safety net (catches anything intraday
+  doesn't watch), skipping anything already alerted intraday.
 
 Both are filtered against a **static list of market-cap-qualified symbols**
 (`data/universe.json`), refreshed weekly by `build_universe.py`, instead of
-looking up market cap on every check — market cap barely changes day to day,
-and this keeps the 5-minute intraday check to a single fast network request
-instead of hundreds.
+looking up market cap on every check — market cap barely changes day to day.
+
+**Why intraday only watches a subset, not the full ~600-stock list:** NSE's
+own live-quote API blocks requests from GitHub Actions' cloud IPs (confirmed
+by testing — even the exact right endpoint and index name gets a 404), so
+`intraday.py` polls Yahoo Finance per-symbol instead (the same source
+`market_cap.py` already uses). Yahoo doesn't bulk-quote hundreds of symbols
+in one request reliably, and polling all ~600 individually every 5 minutes
+risks Yahoo's own rate limits — so intraday watches only the
+`INTRADAY_WATCHLIST_SIZE` (default 150) *largest* qualifying stocks. The
+full list is still covered completely once a day by `main.py`, which reads
+NSE's official bhavcopy archive — a different, unprotected endpoint.
 
 ## How it works
 
 1. **Weekly** (`build_universe.py`): scans every NSE equity's market cap via
    Yahoo Finance and saves the ones above `MARKET_CAP_THRESHOLD_CR` to
    `data/universe.json` (~2,000 lookups, so this takes 15-30+ minutes).
-2. **Every 5 minutes during market hours** (`intraday.py`): fetches one bulk
-   live-quote snapshot from NSE (all ~500 "NIFTY 500" constituents in a
-   single request), filters it down to `data/universe.json`, and alerts on
-   any symbol crossing the threshold for the first time that day. Already-
-   alerted symbols are tracked in `data/alerted_today.json` (auto-resets
-   daily) so you don't get the same stock every 5 minutes for the rest of
-   the day.
+2. **Every 5 minutes during market hours** (`intraday.py`): looks up a live
+   quote (Yahoo Finance) for each of the `INTRADAY_WATCHLIST_SIZE` largest
+   symbols in `data/universe.json`, and alerts on any crossing the threshold
+   for the first time that day. Already-alerted symbols are tracked in
+   `data/alerted_today.json` (auto-resets daily) so you don't get the same
+   stock every 5 minutes for the rest of the day.
 3. **Once at 19:00 IST** (`main.py`): downloads NSE's full official daily
-   bhavcopy (all listed securities, not just the ~500 in the live snapshot),
-   filters it the same way, and alerts on anything new that intraday didn't
-   already cover. Falls back to the most recent published trading day's data
-   (clearly labeled) if today's file isn't out yet.
+   bhavcopy (every listed security, not just the intraday watchlist),
+   filters it against `data/universe.json`, and alerts on anything new that
+   intraday didn't already cover. Falls back to the most recent published
+   trading day's data (clearly labeled) if today's file isn't out yet.
 
 ## One-time setup
 
@@ -117,6 +124,7 @@ edit the defaults in `config.py`):
 |----------------------------|-----------|-------------------------------------------|
 | `PCT_CHANGE_THRESHOLD`     | `5.0`     | % move (either direction) that triggers an alert |
 | `MARKET_CAP_THRESHOLD_CR`  | `10000`   | Minimum market cap (in Cr) to include     |
+| `INTRADAY_WATCHLIST_SIZE`  | `150`     | How many of the largest qualifying stocks the 5-min intraday check polls (see "Why intraday only watches a subset" above) |
 | `ALERT_EMAIL_TO`           | punitmoto2019@gmail.com | Alert recipient email       |
 | `ALERT_PHONE_TO`           | +918130423851 | Alert recipient phone (E.164 format) |
 
@@ -137,6 +145,12 @@ python main.py             # full end-of-day scan
 
 ## Known limitations
 
+- **Intraday only watches the largest `INTRADAY_WATCHLIST_SIZE` stocks**, not
+  the full qualifying universe (see above for why) — a 5%+ move in a smaller
+  qualifying stock (say, rank 300 of ~600) will be caught by the 19:00 IST
+  end-of-day scan, not intraday. Raise `INTRADAY_WATCHLIST_SIZE` if you want
+  broader intraday coverage, but watch for Yahoo Finance rate-limit errors
+  (HTTP 429) in the Actions log if you push it too high.
 - NSE occasionally changes response formats or rate-limits scrapers without
   notice — if a run fails, check the Actions log rather than assuming the
   data is fine.
@@ -145,11 +159,6 @@ python main.py             # full end-of-day scan
 - Market cap comes from Yahoo Finance, not NSE itself, refreshed weekly — a
   company that crosses the 10,000 Cr line mid-week won't be picked up until
   the next Sunday refresh (or you can trigger it manually).
-- The intraday live snapshot ("NIFTY 500", ~500 stocks) covers virtually all
-  >10,000 Cr market-cap names, since NIFTY 500's inclusion cutoff is far
-  below that, but isn't a strict guarantee for one at the margin — the
-  19:00 IST end-of-day scan (which reads the full official bhavcopy, not a
-  snapshot) is the complete-coverage backstop for that gap.
 - GitHub disables scheduled workflows after 60 days of repo inactivity — if
   alerts silently stop, check the Actions tab for a "workflow disabled"
   notice and re-enable it.

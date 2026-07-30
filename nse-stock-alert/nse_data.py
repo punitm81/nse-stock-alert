@@ -94,33 +94,6 @@ def fetch_bhavcopy(for_date: dt.date | None = None) -> tuple[pd.DataFrame, dt.da
     )
 
 
-LIVE_SNAPSHOT_URL = "https://www.nseindia.com/api/equity-stockIndices?index={index}"
-
-
-def fetch_live_snapshot(index: str = "NIFTY 500") -> pd.DataFrame:
-    """Fetches one bulk live-quote snapshot (all constituents of `index` in a single
-    request) -- used for fast intraday checks instead of per-symbol polling, which
-    would need hundreds of individual requests every few minutes and risk NSE
-    blocking the session.
-    """
-    session = _nse_session()
-    session.headers.update({"Accept": "application/json"})
-    url = LIVE_SNAPSHOT_URL.format(index=index.replace(" ", "%20"))
-    response = session.get(url, timeout=20)
-    response.raise_for_status()
-
-    rows = response.json().get("data", [])
-    df = pd.DataFrame(rows)
-    df = df.rename(columns={"symbol": "SYMBOL", "lastPrice": "CLOSE_PRICE", "previousClose": "PREV_CLOSE"})
-    df["SERIES"] = "EQ"
-    df["SYMBOL"] = df["SYMBOL"].astype(str).str.strip()
-    # The index snapshot includes a summary row for the index itself (e.g. "NIFTY 500").
-    df = df[~df["SYMBOL"].str.upper().eq(index.upper())]
-    df["PREV_CLOSE"] = pd.to_numeric(df["PREV_CLOSE"], errors="coerce")
-    df["CLOSE_PRICE"] = pd.to_numeric(df["CLOSE_PRICE"], errors="coerce")
-    return df
-
-
 def _extract_data_date(df: pd.DataFrame) -> dt.date | None:
     if "DATE1" not in df.columns:
         return None

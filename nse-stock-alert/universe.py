@@ -35,3 +35,7 @@ def load_universe() -> dict:
         )
 
     return payload["companies"]
+
+
+def top_symbols_by_market_cap(companies: dict, n: int) -> list:
+    return [symbol for symbol, _ in sorted(companies.items(), key=lambda kv: kv[1], reverse=True)[:n]]

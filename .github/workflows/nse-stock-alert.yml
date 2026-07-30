@@ -4,6 +4,7 @@ on:
   schedule:
     # 13:30 UTC = 19:00 IST, Mon-Fri (NSE's official bhavcopy is usually not
     # published until several hours after the 15:30 close)
+    - cron: "30 13 * * 1-5"
   workflow_dispatch: {}
 
 jobs:

@@ -97,7 +97,7 @@ def fetch_bhavcopy(for_date: dt.date | None = None) -> tuple[pd.DataFrame, dt.da
 LIVE_SNAPSHOT_URL = "https://www.nseindia.com/api/equity-stockIndices?index={index}"
 
 
-def fetch_live_snapshot(index: str = "NIFTY TOTAL MARKET") -> pd.DataFrame:
+def fetch_live_snapshot(index: str = "NIFTY 500") -> pd.DataFrame:
     """Fetches one bulk live-quote snapshot (all constituents of `index` in a single
     request) -- used for fast intraday checks instead of per-symbol polling, which
     would need hundreds of individual requests every few minutes and risk NSE

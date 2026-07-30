@@ -25,14 +25,14 @@ instead of hundreds.
    Yahoo Finance and saves the ones above `MARKET_CAP_THRESHOLD_CR` to
    `data/universe.json` (~2,000 lookups, so this takes 15-30+ minutes).
 2. **Every 5 minutes during market hours** (`intraday.py`): fetches one bulk
-   live-quote snapshot from NSE (all ~750 "NIFTY TOTAL MARKET" constituents
-   in a single request), filters it down to `data/universe.json`, and alerts
-   on any symbol crossing the threshold for the first time that day. Already-
+   live-quote snapshot from NSE (all ~500 "NIFTY 500" constituents in a
+   single request), filters it down to `data/universe.json`, and alerts on
+   any symbol crossing the threshold for the first time that day. Already-
    alerted symbols are tracked in `data/alerted_today.json` (auto-resets
    daily) so you don't get the same stock every 5 minutes for the rest of
    the day.
 3. **Once at 19:00 IST** (`main.py`): downloads NSE's full official daily
-   bhavcopy (all listed securities, not just the ~750 in the live snapshot),
+   bhavcopy (all listed securities, not just the ~500 in the live snapshot),
    filters it the same way, and alerts on anything new that intraday didn't
    already cover. Falls back to the most recent published trading day's data
    (clearly labeled) if today's file isn't out yet.
@@ -145,12 +145,11 @@ python main.py             # full end-of-day scan
 - Market cap comes from Yahoo Finance, not NSE itself, refreshed weekly — a
   company that crosses the 10,000 Cr line mid-week won't be picked up until
   the next Sunday refresh (or you can trigger it manually).
-- The intraday live snapshot ("NIFTY TOTAL MARKET", ~750 stocks) is NSE's
-  broadest single-request bulk quote endpoint, but isn't guaranteed to
-  include literally every stock in your market-cap universe if NSE's index
-  membership criteria exclude one at the margin — the 19:00 IST end-of-day
-  scan (which reads the full official bhavcopy, not a snapshot) is the
-  complete-coverage backstop for that gap.
+- The intraday live snapshot ("NIFTY 500", ~500 stocks) covers virtually all
+  >10,000 Cr market-cap names, since NIFTY 500's inclusion cutoff is far
+  below that, but isn't a strict guarantee for one at the margin — the
+  19:00 IST end-of-day scan (which reads the full official bhavcopy, not a
+  snapshot) is the complete-coverage backstop for that gap.
 - GitHub disables scheduled workflows after 60 days of repo inactivity — if
   alerts silently stop, check the Actions tab for a "workflow disabled"
   notice and re-enable it.

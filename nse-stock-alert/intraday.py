@@ -1,10 +1,18 @@
 """
-Fast intraday check: fetches one bulk live-quote snapshot from NSE, filters it
-down to the static market-cap-qualified universe (see build_universe.py), and
-alerts on any symbol crossing PCT_CHANGE_THRESHOLD for the first time today.
+Fast intraday check: polls Yahoo Finance for the largest (by market cap) stocks
+in the static market-cap-qualified universe (see build_universe.py) and alerts
+on any symbol crossing PCT_CHANGE_THRESHOLD for the first time today.
+
+Only polls config.INTRADAY_WATCHLIST_SIZE symbols rather than the full static
+universe (~600 stocks): NSE's own live-quote API blocks requests from GitHub
+Actions' cloud IPs (confirmed by testing -- it 404s even with the correct
+endpoint and index name), and polling all ~600 stocks individually via Yahoo
+Finance every 5 minutes would risk hitting Yahoo's rate limits. The full
+universe still gets complete coverage once a day at 19:00 IST via the official
+NSE bhavcopy (main.py), which isn't IP-blocked.
+
 Meant to run every ~5 minutes during market hours (see
-.github/workflows/nse-intraday-alert.yml). The end-of-day full scan in main.py
-still runs once a day as a complete-coverage safety net.
+.github/workflows/nse-intraday-alert.yml).
 """
 
 import datetime as dt
@@ -13,11 +21,11 @@ import sys
 from zoneinfo import ZoneInfo
 
 import config
-from nse_data import fetch_live_snapshot, find_pct_movers
+from market_cap import get_live_quote
 from notify_email import send_email_alert
 from notify_sms import send_sms_alert
 from state import load_alerted_today, mark_alerted
-from universe import load_universe
+from universe import load_universe, top_symbols_by_market_cap
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("nse_intraday_alert")
@@ -38,8 +46,9 @@ def build_email_html(rows, now_str):
     )
     return f"""
     <h2>NSE Intraday Alert: &ge;{config.PCT_CHANGE_THRESHOLD:.0f}% move as of {now_str} IST</h2>
-    <p>Universe: NSE equities with market cap &gt; {config.MARKET_CAP_THRESHOLD_CR:,.0f} Cr.
-       First alert of the day for each stock -- see the end-of-day email for the full daily summary.</p>
+    <p>Watchlist: the {config.INTRADAY_WATCHLIST_SIZE} largest NSE stocks with market cap
+       &gt; {config.MARKET_CAP_THRESHOLD_CR:,.0f} Cr. First alert of the day for each stock --
+       see the end-of-day email for the full daily summary across all qualifying stocks.</p>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
       <tr><th>Symbol</th><th>Price</th><th>Prev Close</th><th>% Change</th><th>Mkt Cap (Cr)</th></tr>
       {table_rows}
@@ -61,38 +70,41 @@ def main():
         logger.error(str(exc))
         sys.exit(1)
 
-    logger.info("Fetching live NSE snapshot...")
-    try:
-        snapshot = fetch_live_snapshot()
-    except Exception as exc:
-        logger.error("Failed to fetch live snapshot: %s", exc)
-        sys.exit(1)
-
-    movers = find_pct_movers(snapshot, config.PCT_CHANGE_THRESHOLD)
-    movers = movers[movers["SYMBOL"].isin(universe)]
-
+    watchlist = top_symbols_by_market_cap(universe, config.INTRADAY_WATCHLIST_SIZE)
     already_alerted = load_alerted_today()
-    new_movers = movers[~movers["SYMBOL"].isin(already_alerted)]
+    to_check = [s for s in watchlist if s not in already_alerted]
     logger.info(
-        "%d qualifying live movers, %d already alerted today, %d new",
-        len(movers),
-        len(already_alerted),
-        len(new_movers),
+        "Watchlist: %d symbols, %d already alerted today, checking %d",
+        len(watchlist),
+        len(watchlist) - len(to_check),
+        len(to_check),
     )
 
-    if new_movers.empty:
+    qualified = []
+    for symbol in to_check:
+        quote = get_live_quote(symbol)
+        if quote is None:
+            continue
+        last_price, prev_close = quote
+        if prev_close <= 0:
+            continue
+        pct_change = (last_price - prev_close) / prev_close * 100
+        if abs(pct_change) < config.PCT_CHANGE_THRESHOLD:
+            continue
+        qualified.append(
+            {
+                "SYMBOL": symbol,
+                "CLOSE_PRICE": last_price,
+                "PREV_CLOSE": prev_close,
+                "PCT_CHANGE": pct_change,
+                "MARKET_CAP_CR": universe[symbol],
+            }
+        )
+
+    if not qualified:
+        logger.info("No new qualifying movers this check.")
         return
 
-    qualified = [
-        {
-            "SYMBOL": row["SYMBOL"],
-            "CLOSE_PRICE": row["CLOSE_PRICE"],
-            "PREV_CLOSE": row["PREV_CLOSE"],
-            "PCT_CHANGE": row["PCT_CHANGE"],
-            "MARKET_CAP_CR": universe[row["SYMBOL"]],
-        }
-        for _, row in new_movers.iterrows()
-    ]
     qualified.sort(key=lambda r: abs(r["PCT_CHANGE"]), reverse=True)
 
     subject = (

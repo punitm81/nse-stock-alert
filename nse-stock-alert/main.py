@@ -24,7 +24,7 @@ logger = logging.getLogger("nse_alert")
 MAX_SMS_ROWS = 10
 
 
-def build_email_html(rows, today):
+def build_email_html(rows, data_date, is_stale):
     table_rows = "".join(
         "<tr>"
         f"<td>{r['SYMBOL']}</td>"
@@ -35,8 +35,15 @@ def build_email_html(rows, today):
         "</tr>"
         for r in rows
     )
+    stale_notice = (
+        "<p style=\"color:#b00\"><b>Note:</b> today's NSE bhavcopy wasn't published yet when this "
+        f"ran, so this is the most recent available trading day's data ({data_date}).</p>"
+        if is_stale
+        else ""
+    )
     return f"""
-    <h2>NSE Stocks that moved &ge;{config.PCT_CHANGE_THRESHOLD:.0f}% on {today}</h2>
+    <h2>NSE Stocks that moved &ge;{config.PCT_CHANGE_THRESHOLD:.0f}% on {data_date}</h2>
+    {stale_notice}
     <p>Universe: all NSE equities with market cap &gt; {config.MARKET_CAP_THRESHOLD_CR:,.0f} Cr</p>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
       <tr>
@@ -47,24 +54,27 @@ def build_email_html(rows, today):
     """
 
 
-def build_sms_text(rows, today):
+def build_sms_text(rows, data_date, is_stale):
     top = rows[:MAX_SMS_ROWS]
     lines = "\n".join(f"{r['SYMBOL']} {r['PCT_CHANGE']:+.1f}%" for r in top)
-    text = f"NSE {config.PCT_CHANGE_THRESHOLD:.0f}%+ movers ({today}):\n{lines}"
+    label = f"{data_date} (prev trading day)" if is_stale else str(data_date)
+    text = f"NSE {config.PCT_CHANGE_THRESHOLD:.0f}%+ movers ({label}):\n{lines}"
     if len(rows) > MAX_SMS_ROWS:
         text += f"\n+{len(rows) - MAX_SMS_ROWS} more, see email"
     return text
 
 
 def main():
-    today = dt.date.today().isoformat()
+    today = dt.date.today()
 
     logger.info("Fetching NSE bhavcopy...")
     try:
-        bhav = fetch_bhavcopy()
+        bhav, data_date = fetch_bhavcopy(today)
     except Exception as exc:
         logger.error("Failed to fetch bhavcopy (market holiday or NSE blocked the request): %s", exc)
         sys.exit(1)
+
+    is_stale = data_date != today
 
     movers = find_pct_movers(bhav, config.PCT_CHANGE_THRESHOLD)
     logger.info("Found %d stocks with |change| >= %.1f%%", len(movers), config.PCT_CHANGE_THRESHOLD)
@@ -91,14 +101,18 @@ def main():
     logger.info("%d stocks qualify after the market cap filter", len(qualified))
 
     if not qualified:
-        logger.info("No qualifying movers today; no alert sent.")
+        logger.info("No qualifying movers on %s; no alert sent.", data_date)
         return
 
     qualified.sort(key=lambda r: abs(r["PCT_CHANGE"]), reverse=True)
 
-    subject = f"NSE Alert: {len(qualified)} stock(s) moved >={config.PCT_CHANGE_THRESHOLD:.0f}% on {today}"
-    send_email_alert(subject, build_email_html(qualified, today))
-    send_sms_alert(build_sms_text(qualified, today))
+    stale_tag = " [prev trading day]" if is_stale else ""
+    subject = (
+        f"NSE Alert: {len(qualified)} stock(s) moved >={config.PCT_CHANGE_THRESHOLD:.0f}% "
+        f"on {data_date}{stale_tag}"
+    )
+    send_email_alert(subject, build_email_html(qualified, data_date, is_stale))
+    send_sms_alert(build_sms_text(qualified, data_date, is_stale))
 
 
 if __name__ == "__main__":

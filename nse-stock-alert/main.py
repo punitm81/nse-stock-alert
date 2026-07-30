@@ -13,10 +13,11 @@ import logging
 import sys
 
 import config
-from market_cap import get_market_cap_cr
 from nse_data import fetch_bhavcopy, find_pct_movers
 from notify_email import send_email_alert
 from notify_sms import send_sms_alert
+from state import load_alerted_today
+from universe import load_universe
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("nse_alert")
@@ -67,6 +68,12 @@ def build_sms_text(rows, data_date, is_stale):
 def main():
     today = dt.date.today()
 
+    try:
+        universe = load_universe()
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
+
     logger.info("Fetching NSE bhavcopy...")
     try:
         bhav, data_date = fetch_bhavcopy(today)
@@ -77,28 +84,31 @@ def main():
     is_stale = data_date != today
 
     movers = find_pct_movers(bhav, config.PCT_CHANGE_THRESHOLD)
-    logger.info("Found %d stocks with the |change| >= %.1f%%", len(movers), config.PCT_CHANGE_THRESHOLD)
+    movers = movers[movers["SYMBOL"].isin(universe)]
+    logger.info(
+        "%d stocks with |change| >= %.1f%% and market cap > %.0f Cr",
+        len(movers),
+        config.PCT_CHANGE_THRESHOLD,
+        config.MARKET_CAP_THRESHOLD_CR,
+    )
 
-    qualified = []
-    for _, row in movers.iterrows():
-        symbol = row["SYMBOL"]
-        mcap_cr = get_market_cap_cr(symbol)
-        if mcap_cr is None:
-            logger.info("Skipping %s: market cap unavailable", symbol)
-            continue
-        if mcap_cr < config.MARKET_CAP_THRESHOLD_CR:
-            continue
-        qualified.append(
-            {
-                "SYMBOL": symbol,
-                "CLOSE_PRICE": row["CLOSE_PRICE"],
-                "PREV_CLOSE": row["PREV_CLOSE"],
-                "PCT_CHANGE": row["PCT_CHANGE"],
-                "MARKET_CAP_CR": mcap_cr,
-            }
-        )
+    # Skip anything the intraday checker already alerted on today, so this
+    # end-of-day summary doesn't duplicate a notification you already got.
+    already_alerted = load_alerted_today()
+    movers = movers[~movers["SYMBOL"].isin(already_alerted)]
 
-    logger.info("%d stocks qualify after the market cap filter", len(qualified))
+    qualified = [
+        {
+            "SYMBOL": row["SYMBOL"],
+            "CLOSE_PRICE": row["CLOSE_PRICE"],
+            "PREV_CLOSE": row["PREV_CLOSE"],
+            "PCT_CHANGE": row["PCT_CHANGE"],
+            "MARKET_CAP_CR": universe[row["SYMBOL"]],
+        }
+        for _, row in movers.iterrows()
+    ]
+
+    logger.info("%d new stock(s) to alert on (not already sent intraday today)", len(qualified))
 
     if not qualified:
         logger.info("No qualifying movers on %s; no alert sent.", data_date)

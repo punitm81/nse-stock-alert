@@ -1,3 +1,5 @@
+"""Sends the alert SMS via Twilio."""
+
 import logging
 
 from twilio.base.exceptions import TwilioRestException

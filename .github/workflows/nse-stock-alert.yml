@@ -2,8 +2,8 @@ name: NSE Stock Alert
 
 on:
   schedule:
-    # 10:05 UTC = 15:35 IST, Mon-Fri (~5 min after NSE's 15:30 close)
-    - cron: "5 10 * * 1-5"
+    # 13:30 UTC = 19:00 IST, Mon-Fri (NSE's official bhavcopy is usually not
+    # published until several hours after the 15:30 close)
   workflow_dispatch: {}
 
 jobs:

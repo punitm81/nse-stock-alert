@@ -77,7 +77,7 @@ def main():
     is_stale = data_date != today
 
     movers = find_pct_movers(bhav, config.PCT_CHANGE_THRESHOLD)
-    logger.info("Found %d stocks with |change| >= %.1f%%", len(movers), config.PCT_CHANGE_THRESHOLD)
+    logger.info("Found %d stocks with the |change| >= %.1f%%", len(movers), config.PCT_CHANGE_THRESHOLD)
 
     qualified = []
     for _, row in movers.iterrows():

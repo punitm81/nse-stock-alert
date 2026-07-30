@@ -22,8 +22,9 @@ BASE_HEADERS = {
 NSE_HOME_URL = "https://www.nseindia.com/"
 # Current, date-stamped daily bhavcopy that NSE actively maintains (UDiFF format).
 UDIFF_BHAVCOPY_URL = "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{ymd}_F_0000.csv.zip"
-# Older "current day" file, kept only as a fallback if the UDiFF file isn't reachable.
-LEGACY_BHAVCOPY_URL = "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full.csv"
+# How many calendar days to step backwards looking for the most recent published
+# bhavcopy, if today's isn't out yet (covers weekends plus a holiday or two).
+MAX_LOOKBACK_DAYS = 7
 
 UDIFF_COLUMN_MAP = {
     "TckrSymb": "SYMBOL",
@@ -52,57 +53,54 @@ def _read_udiff_zip(content: bytes) -> pd.DataFrame:
     return df.rename(columns=UDIFF_COLUMN_MAP)
 
 
-def _read_legacy_csv(text: str) -> pd.DataFrame:
-    df = pd.read_csv(io.StringIO(text))
-    df.columns = [c.strip() for c in df.columns]
-    return df
+def fetch_bhavcopy(for_date: dt.date | None = None) -> tuple[pd.DataFrame, dt.date]:
+    """Downloads the official NSE daily bhavcopy for `for_date` (default: today).
 
-
-def fetch_bhavcopy(for_date: dt.date | None = None) -> pd.DataFrame:
-    """Downloads the official NSE daily bhavcopy for `for_date` (default: today)."""
+    If that day's file isn't published yet, steps backwards to the most recent
+    trading day that is available. Returns (dataframe, actual_data_date) so the
+    caller can clearly label the alert when it isn't today's session.
+    """
     target_date = for_date or dt.date.today()
     session = _nse_session()
 
-    udiff_url = UDIFF_BHAVCOPY_URL.format(ymd=target_date.strftime("%Y%m%d"))
-    response = session.get(udiff_url, timeout=30)
-    if response.ok and response.content[:2] == b"PK":
-        logger.info("Fetched UDiFF bhavcopy for %s", target_date)
+    for offset in range(MAX_LOOKBACK_DAYS + 1):
+        candidate = target_date - dt.timedelta(days=offset)
+        udiff_url = UDIFF_BHAVCOPY_URL.format(ymd=candidate.strftime("%Y%m%d"))
+        response = session.get(udiff_url, timeout=30)
+
+        if not (response.ok and response.content[:2] == b"PK"):
+            logger.info("No bhavcopy for %s (HTTP %s)", candidate, response.status_code)
+            continue
+
         df = _read_udiff_zip(response.content)
-    else:
-        logger.warning(
-            "UDiFF bhavcopy unavailable for %s (HTTP %s); falling back to legacy endpoint",
-            target_date,
-            response.status_code,
-        )
-        response = session.get(LEGACY_BHAVCOPY_URL, timeout=30)
-        response.raise_for_status()
-        df = _read_legacy_csv(response.text)
+        for col in ("SYMBOL", "SERIES"):
+            df[col] = df[col].astype(str).str.strip()
+        data_date = _extract_data_date(df) or candidate
 
-    for col in ("SYMBOL", "SERIES"):
-        df[col] = df[col].astype(str).str.strip()
+        if offset == 0:
+            logger.info("Fetched bhavcopy for %s (today)", data_date)
+        else:
+            logger.warning(
+                "Today's (%s) bhavcopy isn't published yet; using the most recent "
+                "available trading day's data instead: %s",
+                target_date,
+                data_date,
+            )
+        return df, data_date
 
-    _verify_freshness(df, target_date)
-    return df
+    raise RuntimeError(
+        f"Could not find any NSE bhavcopy in the {MAX_LOOKBACK_DAYS} days up to {target_date}. "
+        "NSE may have changed its file format, or the source is unreachable."
+    )
 
 
-def _verify_freshness(df: pd.DataFrame, expected_date: dt.date) -> None:
-    """Refuses to proceed on stale/frozen data instead of silently alerting on wrong prices."""
+def _extract_data_date(df: pd.DataFrame) -> dt.date | None:
     if "DATE1" not in df.columns:
-        logger.warning("Bhavcopy has no date column; cannot verify freshness.")
-        return
-
+        return None
     dates = pd.to_datetime(df["DATE1"], errors="coerce").dt.date.dropna()
     if dates.empty:
-        logger.warning("Could not parse any dates from bhavcopy; cannot verify freshness.")
-        return
-
-    data_date = dates.mode().iloc[0]
-    if data_date != expected_date:
-        raise RuntimeError(
-            f"Bhavcopy data is dated {data_date}, not the expected {expected_date}. "
-            "NSE likely hasn't published today's file yet (or the source has changed "
-            "format) -- refusing to send a possibly-stale alert."
-        )
+        return None
+    return dates.mode().iloc[0]
 
 
 def find_pct_movers(df: pd.DataFrame, pct_threshold: float) -> pd.DataFrame:

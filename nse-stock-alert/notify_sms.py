@@ -1,7 +1,6 @@
-"""Sends the alert SMS via Twilio."""
-
 import logging
 
+from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
 
 import config
@@ -15,9 +14,12 @@ def send_sms_alert(body: str) -> None:
         return
 
     client = Client(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN)
-    client.messages.create(
-        body=body,
-        from_=config.TWILIO_FROM_NUMBER,
-        to=config.ALERT_PHONE_TO,
-    )
-    logger.info("SMS alert sent to %s", config.ALERT_PHONE_TO)
+    try:
+        client.messages.create(
+            body=body,
+            from_=config.TWILIO_FROM_NUMBER,
+            to=config.ALERT_PHONE_TO,
+        )
+        logger.info("SMS alert sent to %s", config.ALERT_PHONE_TO)
+    except TwilioRestException as exc:
+        logger.error("Failed to send SMS alert (check Twilio credentials/verified numbers): %s", exc)

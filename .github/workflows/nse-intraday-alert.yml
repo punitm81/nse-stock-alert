@@ -1,0 +1,51 @@
+name: NSE Intraday Alert
+
+on:
+  schedule:
+    # All times UTC. NSE market hours are 9:15-15:30 IST = 3:45-10:00 UTC.
+    - cron: "45,50,55 3 * * 1-5"   # 9:15, 9:20, 9:25 IST
+    - cron: "*/5 4-9 * * 1-5"      # 9:30 IST - 15:25 IST
+    - cron: "0 10 * * 1-5"         # 15:30 IST (close)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nse-intraday-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nse-stock-alert
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - run: python intraday.py
+        env:
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+
+      - name: Persist today's alerted-symbols state
+        run: |
+          git add data/alerted_today.json
+          if git diff --cached --quiet; then
+            echo "No state change to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update intraday alert state [skip ci]"
+            git push
+          fi

@@ -40,6 +40,10 @@ jobs:
 
       - name: Persist today's alerted-symbols state
         run: |
+          if [ ! -f data/alerted_today.json ]; then
+            echo "No state file (no qualifying movers this run) -- nothing to commit."
+            exit 0
+          fi
           git add data/alerted_today.json
           if git diff --cached --quiet; then
             echo "No state change to commit."

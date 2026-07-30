@@ -11,7 +11,6 @@ import datetime as dt
 import json
 import logging
 import sys
-import time
 from pathlib import Path
 
 import config
@@ -22,7 +21,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("build_universe")
 
 UNIVERSE_PATH = Path(__file__).parent / "data" / "universe.json"
-REQUEST_PAUSE_SECONDS = 0.3  # be polite to Yahoo Finance across ~2000 lookups
 
 
 def main():
@@ -43,7 +41,6 @@ def main():
             companies[symbol] = round(mcap_cr, 1)
         if i % 200 == 0:
             logger.info("Checked %d/%d symbols, %d qualify so far", i, len(symbols), len(companies))
-        time.sleep(REQUEST_PAUSE_SECONDS)
 
     logger.info(
         "%d/%d symbols have market cap > %.0f Cr (as of bhavcopy date %s)",

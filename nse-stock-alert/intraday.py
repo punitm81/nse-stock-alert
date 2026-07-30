@@ -1,18 +1,18 @@
 """
-Fast intraday check: polls Yahoo Finance for the largest (by market cap) stocks
-in the static market-cap-qualified universe (see build_universe.py) and alerts
-on any symbol crossing PCT_CHANGE_THRESHOLD for the first time today.
+Fast intraday check: polls Yahoo Finance for stocks in the static market-cap-
+qualified universe (see build_universe.py) and alerts on any symbol crossing
+PCT_CHANGE_THRESHOLD for the first time today.
 
-Only polls config.INTRADAY_WATCHLIST_SIZE symbols rather than the full static
-universe (~600 stocks): NSE's own live-quote API blocks requests from GitHub
-Actions' cloud IPs (confirmed by testing -- it 404s even with the correct
-endpoint and index name), and polling all ~600 stocks individually via Yahoo
-Finance every 5 minutes would risk hitting Yahoo's rate limits. The full
-universe still gets complete coverage once a day at 19:00 IST via the official
-NSE bhavcopy (main.py), which isn't IP-blocked.
-
-Meant to run every ~5 minutes during market hours (see
-.github/workflows/nse-intraday-alert.yml).
+NSE's own live-quote API blocks requests from GitHub Actions' cloud IPs
+(confirmed by testing -- it 404s even with the correct endpoint and index
+name), so this polls Yahoo Finance per-symbol instead (same source
+market_cap.py already uses, rate-limited there to stay well under Yahoo's
+undocumented limits). config.INTRADAY_WATCHLIST_SIZE caps how many of the
+largest-by-market-cap symbols get checked each run; its default covers the
+full universe (~600 stocks). At ~3 requests/second that's ~3-4 minutes per
+run, comfortably inside the 15-minute check interval (see
+.github/workflows/nse-intraday-alert.yml). The end-of-day scan (main.py)
+remains a complete-coverage backstop regardless.
 """
 
 import datetime as dt
@@ -33,7 +33,7 @@ logger = logging.getLogger("nse_intraday_alert")
 IST = ZoneInfo("Asia/Kolkata")
 
 
-def build_email_html(rows, now_str):
+def build_email_html(rows, now_str, watchlist_size):
     table_rows = "".join(
         "<tr>"
         f"<td>{r['SYMBOL']}</td>"
@@ -46,7 +46,7 @@ def build_email_html(rows, now_str):
     )
     return f"""
     <h2>NSE Intraday Alert: &ge;{config.PCT_CHANGE_THRESHOLD:.0f}% move as of {now_str} IST</h2>
-    <p>Watchlist: the {config.INTRADAY_WATCHLIST_SIZE} largest NSE stocks with market cap
+    <p>Watchlist: {watchlist_size} NSE stocks with market cap
        &gt; {config.MARKET_CAP_THRESHOLD_CR:,.0f} Cr. First alert of the day for each stock --
        see the end-of-day email for the full daily summary across all qualifying stocks.</p>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
@@ -111,7 +111,7 @@ def main():
         f"NSE Intraday Alert: {len(qualified)} stock(s) crossed "
         f"{config.PCT_CHANGE_THRESHOLD:.0f}% ({now_str} IST)"
     )
-    send_email_alert(subject, build_email_html(qualified, now_str))
+    send_email_alert(subject, build_email_html(qualified, now_str, len(watchlist)))
     send_sms_alert(build_sms_text(qualified, now_str))
 
     mark_alerted([r["SYMBOL"] for r in qualified])

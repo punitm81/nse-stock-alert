@@ -12,6 +12,7 @@
     "BBOX",
     "BLUESTONE",
     "CONCORDBIO",
+    "FRACTAL",
     "HFCL",
     "HYUNDAI",
     "JPPOWER",
@@ -27,6 +28,8 @@
     "TDPOWERSYS",
     "THANGAMAYL",
     "THELEELA",
+    "TMCV",
+    "TORNTPHARM",
     "VOGL"
   ]
 }

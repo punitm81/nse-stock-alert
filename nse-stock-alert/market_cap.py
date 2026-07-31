@@ -41,7 +41,10 @@ def get_market_cap_cr(symbol: str):
 
     try:
         _throttle()
-        market_cap = yf.Ticker(ticker).fast_info.get("market_cap")
+        # yfinance's FastInfo.get() only recognizes camelCase keys (e.g. "marketCap"),
+        # not snake_case ("market_cap") -- the latter silently returns the default
+        # with no error, before any network call even happens.
+        market_cap = yf.Ticker(ticker).fast_info.get("marketCap")
     except Exception:
         market_cap = None
 
@@ -63,9 +66,10 @@ def get_live_quote(symbol: str):
     ticker = f"{symbol}.NS"
     try:
         _throttle()
+        # See get_market_cap_cr(): FastInfo.get() requires camelCase keys.
         info = yf.Ticker(ticker).fast_info
-        last_price = info.get("last_price")
-        prev_close = info.get("previous_close")
+        last_price = info.get("lastPrice")
+        prev_close = info.get("previousClose")
     except Exception as exc:
         logger.warning("Could not fetch live quote for %s: %s", ticker, exc)
         return None

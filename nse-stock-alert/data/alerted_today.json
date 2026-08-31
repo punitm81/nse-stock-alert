@@ -1,13 +1,29 @@
 {
-  "date": "2026-08-28",
+  "date": "2026-08-31",
   "symbols": [
+    "ADANIENSOL",
+    "ADANIENT",
+    "ADANIGREEN",
+    "ADANIPORTS",
+    "ADANIPOWER",
     "ATHERENERG",
-    "CGCL",
-    "COFORGE",
-    "IFCI",
-    "INGERRAND",
-    "NAZARA",
+    "AVALON",
+    "BALRAMCHIN",
+    "CYIENT",
+    "EIHOTEL",
+    "GABRIEL",
+    "HCG",
+    "INDGN",
+    "KAYNES",
+    "LODHA",
     "NSLNISP",
-    "PTCIL"
+    "OLAELEC",
+    "PGIL",
+    "PRUDENT",
+    "SHADOWFAX",
+    "SHILPAMED",
+    "SUVEN",
+    "TMB",
+    "WABAG"
   ]
 }

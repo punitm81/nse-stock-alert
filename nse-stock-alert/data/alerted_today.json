@@ -1,26 +1,14 @@
 {
-  "date": "2026-09-04",
+  "date": "2026-09-07",
   "symbols": [
-    "ACMESOLAR",
-    "AFFLE",
-    "CARBORUNIV",
-    "HBLENGINE",
-    "HFCL",
-    "IFCI",
-    "IGL",
-    "INDOMIM",
-    "KEI",
-    "LALITHAA",
-    "NIACL",
+    "AVALON",
+    "BBOX",
+    "CARTRADE",
+    "GRWRHITECH",
+    "HEG",
+    "MILKYMIST",
     "PCJEWELLER",
-    "PFOCUS",
-    "PINELABS",
-    "POLYCAB",
-    "PWL",
-    "QPOWER",
-    "RRKABEL",
-    "SKYGOLD",
-    "SPLPETRO",
-    "WOCKPHARMA"
+    "PVRINOX",
+    "SYRMA"
   ]
 }

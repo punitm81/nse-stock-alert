@@ -1,16 +1,17 @@
 {
-  "date": "2026-09-10",
+  "date": "2026-09-11",
   "symbols": [
-    "ACUTAAS",
-    "FORCEMOT",
-    "HEG",
-    "KEC",
+    "BBOX",
+    "COCHINSHIP",
+    "DHOOTTRANS",
+    "GODREJPROP",
+    "GUJENERGY",
     "KENNAMET",
-    "MOLBIO",
-    "OLAELEC",
-    "PGIL",
-    "SAILIFE",
-    "VARROC",
-    "WELCORP"
+    "LODHA",
+    "PIIND",
+    "PINELABS",
+    "PWL",
+    "SUNTV",
+    "YESBANK"
   ]
 }

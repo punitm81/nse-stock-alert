@@ -3,6 +3,7 @@
   "symbols": [
     "ABDL",
     "AEGISVOPAK",
+    "AUBANK",
     "AXISBANK",
     "BAJFINANCE",
     "CHOLAFIN",
@@ -10,14 +11,18 @@
     "CONCORDBIO",
     "ESDS",
     "HDFCLIFE",
+    "ICICIGI",
     "IFCI",
     "LTF",
     "MFSL",
+    "MOLBIO",
     "NAUKRI",
     "NIACL",
     "PIRAMALFIN",
     "POLICYBZR",
     "SEDEMAC",
-    "SUNTV"
+    "SOUTHBANK",
+    "SUNTV",
+    "UJJIVANSFB"
   ]
 }

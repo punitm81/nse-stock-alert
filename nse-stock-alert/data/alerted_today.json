@@ -1,22 +1,21 @@
 {
-  "date": "2026-09-29",
+  "date": "2026-09-30",
   "symbols": [
-    "ADANIENT",
-    "AMBER",
-    "AZAD",
-    "COROMANDEL",
+    "AEGISLOG",
+    "APOLLOHOSP",
+    "ASTERDM",
     "CUPID",
-    "HONASA",
-    "KFINTECH",
-    "KIRLOSBROS",
-    "KIRLOSENG",
-    "LLOYDSENGG",
-    "POLICYBZR",
-    "SPLPETRO",
-    "SUDEEPPHRM",
+    "FIVESTAR",
+    "FORTIS",
+    "HCG",
+    "JKCEMENT",
+    "MANIPALHOS",
+    "MARKSANS",
+    "MAXHEALTH",
+    "SOLARINDS",
     "SUNTV",
-    "TDPOWERSYS",
-    "VEDPOWER",
-    "WABAG"
+    "SYRMA",
+    "THELEELA",
+    "YATHARTH"
   ]
 }

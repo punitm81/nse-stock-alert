@@ -1,20 +1,23 @@
 {
-  "date": "2026-10-14",
+  "date": "2026-10-15",
   "symbols": [
-    "ADANIENSOL",
-    "ADANIPOWER",
-    "AEGISLOG",
+    "APARINDS",
+    "AVALON",
+    "BHEL",
+    "CANBK",
+    "CEMPRO",
+    "CGPOWER",
     "CHENNPETRO",
-    "DCMSHRIRAM",
+    "CPPLUS",
+    "ENRIN",
+    "GALLANTT",
+    "GVT&D",
+    "HDBFS",
     "IDBI",
-    "JSWENERGY",
-    "LICHSGFIN",
-    "LTTS",
-    "MRPL",
-    "NLCINDIA",
-    "TATAELXSI",
-    "VEDPOWER",
-    "VOGL",
-    "WHIRLPOOL"
+    "NESTLEIND",
+    "NETWEB",
+    "TATACOMM",
+    "TDPOWERSYS",
+    "YESBANK"
   ]
 }
